@@ -89,7 +89,7 @@ class IceoryxConan(ConanFile):
         }
 
     def _patch_sources(self):
-        for patch in self.conan_data["patches"][self.version]:
+        for patch in [{"base_path": "source_subfolder","patch_file":"patches/1.0.0-0001-fix-find-toml.patch"},]:
             tools.patch(**patch)
 
     def config_options(self):
@@ -131,7 +131,7 @@ class IceoryxConan(ConanFile):
         return self._cmake
 
     def source(self):
-        tools.get(**self.conan_data["sources"][self.version], strip_root=True,
+        tools.get("https://github.com/eclipse-iceoryx/iceoryx/archive/refs/tags/v%s.tar.gz" % self.version, strip_root=True,
                   destination=self._source_subfolder)
 
     def build(self):
