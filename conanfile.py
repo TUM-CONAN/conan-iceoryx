@@ -15,11 +15,14 @@ class IceoryxConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     options = {
          "shared":          [True, False],
-         "toml_config":     [True, False]
+         "toml_config":     [True, False],
+         "with_introspection":     [True, False]
     }
     default_options = {
         "shared":           False,
-        "toml_config":      True
+        "toml_config":      True,
+        "with_introspection": True,
+        "ncurses:with_tinfo": True
     }
     generators = ["cmake", "cmake_find_package"]
     exports_sources = ["patches/**","CMakeLists.txt"]
@@ -85,7 +88,8 @@ class IceoryxConan(ConanFile):
             "iceoryx_posh::iceoryx_posh": "iceoryx::posh",
             "iceoryx_posh::iceoryx_posh_roudi": "iceoryx::posh_roudi",
             "iceoryx_binding_c::iceoryx_binding_c": "iceoryx::binding_c",
-            "iceoryx_utils::iceoryx_utils": "iceoryx::utils"
+            "iceoryx_utils::iceoryx_utils": "iceoryx::utils",
+            "iceoryx_introspection::iceoryx_introspection": "iceoryx::introspection"
         }
 
     def _patch_sources(self):
@@ -97,6 +101,8 @@ class IceoryxConan(ConanFile):
             self.requires("cpptoml/0.1.1")
         if self.settings.os == "Linux":
             self.requires("acl/2.3.1")
+        if self.options.with_introspection:
+            self.requires("ncurses/6.2")
     
     def validate(self):
         os = self.settings.os
@@ -127,6 +133,7 @@ class IceoryxConan(ConanFile):
             return self._cmake
         self._cmake = CMake(self)
         self._cmake.definitions["TOML_CONFIG"] = self.options.toml_config
+        self._cmake.definitions["INTROSPECTION"] = self.options.with_introspection
         self._cmake.configure()
         return self._cmake
 
@@ -243,3 +250,8 @@ class IceoryxConan(ConanFile):
         self.cpp_info.components["bind_c"].build_modules["cmake_find_package_multi"] = [
             os.path.join(self._module_subfolder, "conan-official-iceoryx_binding_c-targets.cmake")
         ]
+        if self.options.with_introspection:
+            # introspection
+            self.cpp_info.components["introspection"].name = "introspection"
+            self.cpp_info.components["introspection"].libs = ["iceoryx_introspection"]
+            self.cpp_info.components["introspection"].requires = ["utils", "posh", "ncurses::ncurses"]
