@@ -105,7 +105,7 @@ class IceoryxConan(ConanFile):
             self.requires("cpptoml/0.1.1")
         if self.settings.os == "Linux":
             self.requires("acl/2.3.1")
-        if self.options.with_introspection:
+        if self.options.with_introspection and self.settings.os != "Windows":
             self.requires("ncurses/6.2")
     
     def validate(self):
@@ -137,7 +137,7 @@ class IceoryxConan(ConanFile):
             return self._cmake
         self._cmake = CMake(self)
         self._cmake.definitions["TOML_CONFIG"] = self.options.toml_config
-        self._cmake.definitions["INTROSPECTION"] = self.options.with_introspection
+        self._cmake.definitions["INTROSPECTION"] = self.options.with_introspection and self.settings.os != "Windows"
         self._cmake.configure()
         return self._cmake
 
