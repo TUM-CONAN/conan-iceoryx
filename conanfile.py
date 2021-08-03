@@ -97,6 +97,10 @@ class IceoryxConan(ConanFile):
             tools.patch(**patch)
 
     def config_options(self):
+        if self.settings.os == "Windows":
+            self.options.with_introspection=False
+    
+    def requirements(self):
         if self.options.toml_config:
             self.requires("cpptoml/0.1.1")
         if self.settings.os == "Linux":
