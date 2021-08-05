@@ -84,13 +84,15 @@ class IceoryxConan(ConanFile):
 
     @property
     def _target_aliases(self):
-        return {
+        aliases = {
             "iceoryx_posh::iceoryx_posh": "iceoryx::posh",
             "iceoryx_posh::iceoryx_posh_roudi": "iceoryx::posh_roudi",
             "iceoryx_binding_c::iceoryx_binding_c": "iceoryx::binding_c",
             "iceoryx_utils::iceoryx_utils": "iceoryx::utils",
-            "iceoryx_introspection::iceoryx_introspection": "iceoryx::introspection"
         }
+        if self.options.with_introspection and self.settings.os != "Windows":
+            aliases["iceoryx_introspection::iceoryx_introspection"] = "iceoryx::introspection"
+        return aliases
 
     def _patch_sources(self):
         for patch in [{"base_path": "source_subfolder","patch_file":"patches/1.0.0-0001-fix-find-toml.patch"},]:
@@ -105,7 +107,7 @@ class IceoryxConan(ConanFile):
             self.requires("cpptoml/0.1.1")
         if self.settings.os == "Linux":
             self.requires("acl/2.3.1")
-        if self.options.with_introspection:
+        if self.options.with_introspection and self.settings.os != "Windows":
             self.requires("ncurses/6.2")
     
     def validate(self):
@@ -137,7 +139,7 @@ class IceoryxConan(ConanFile):
             return self._cmake
         self._cmake = CMake(self)
         self._cmake.definitions["TOML_CONFIG"] = self.options.toml_config
-        self._cmake.definitions["INTROSPECTION"] = self.options.with_introspection
+        self._cmake.definitions["INTROSPECTION"] = self.options.with_introspection and self.settings.os != "Windows"
         self._cmake.configure()
         return self._cmake
 
@@ -254,7 +256,7 @@ class IceoryxConan(ConanFile):
         self.cpp_info.components["bind_c"].build_modules["cmake_find_package_multi"] = [
             os.path.join(self._module_subfolder, "conan-official-iceoryx_binding_c-targets.cmake")
         ]
-        if self.options.with_introspection:
+        if self.options.with_introspection and self.settings.os != "Windows":
             # introspection
             self.cpp_info.components["introspection"].name = "introspection"
             self.cpp_info.components["introspection"].libs = ["iceoryx_introspection"]
