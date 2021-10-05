@@ -1,5 +1,5 @@
 diff --git a/iceoryx_posh/CMakeLists.txt b/iceoryx_posh/CMakeLists.txt
-index 6df5429b..e7dedbc4 100644
+index 0e10495f9..09acaa57c 100644
 --- a/iceoryx_posh/CMakeLists.txt
 +++ b/iceoryx_posh/CMakeLists.txt
 @@ -27,8 +27,6 @@ option(TOML_CONFIG "TOML support for RouDi with dynamic configuration" ON)
@@ -11,9 +11,9 @@ index 6df5429b..e7dedbc4 100644
      find_package(cpptoml REQUIRED)
  endif()
  
-@@ -325,7 +323,6 @@ if(TOML_CONFIG)
+@@ -328,7 +326,6 @@ if(TOML_CONFIG)
          iceoryx_posh::iceoryx_posh
-         iceoryx_utils::iceoryx_utils
+         iceoryx_hoofs::iceoryx_hoofs
          iceoryx_posh::iceoryx_posh_roudi
 -        cpptoml
          ${ICEORYX_SANITIZER_FLAGS}
