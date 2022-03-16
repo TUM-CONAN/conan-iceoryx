@@ -6,7 +6,7 @@ import textwrap
 class IceoryxConan(ConanFile):
 
     name = "iceoryx"
-    version = "1.0.1"
+    version = "2.0.0"
     license = "Apache-2.0"
     homepage = "https://iceoryx.io/"
     url = "https://github.com/TUM-CONAN/conan-iceoryx"
@@ -88,14 +88,14 @@ class IceoryxConan(ConanFile):
             "iceoryx_posh::iceoryx_posh": "iceoryx::posh",
             "iceoryx_posh::iceoryx_posh_roudi": "iceoryx::posh_roudi",
             "iceoryx_binding_c::iceoryx_binding_c": "iceoryx::binding_c",
-            "iceoryx_utils::iceoryx_utils": "iceoryx::utils",
+            "iceoryx_hoofs::iceoryx_hoofs": "iceoryx::hoofs",
         }
         if self.options.with_introspection and self.settings.os != "Windows":
             aliases["iceoryx_introspection::iceoryx_introspection"] = "iceoryx::introspection"
         return aliases
 
     def _patch_sources(self):
-        for patch in [{"base_path": "source_subfolder","patch_file":"patches/1.0.0-0001-fix-find-toml.patch"},]:
+        for patch in [{"base_path": "source_subfolder","patch_file":"patches/2.0.0-fix-cpptoml-cmake.patch"},]:
             tools.patch(**patch)
 
     def config_options(self):
@@ -138,8 +138,9 @@ class IceoryxConan(ConanFile):
         if self._cmake:
             return self._cmake
         self._cmake = CMake(self)
-        self._cmake.definitions["TOML_CONFIG"] = self.options.toml_config
-        self._cmake.definitions["INTROSPECTION"] = self.options.with_introspection and self.settings.os != "Windows"
+        self._cmake.definitions["DOWNLOAD_TOML_LIB"] = "OFF"
+        self._cmake.definitions["TOML_CONFIG"] = "ON" if self.options.toml_config else "OFF"
+        self._cmake.definitions["INTROSPECTION"] = "ON" if (self.options.with_introspection and self.settings.os != "Windows") else "OFF"
         self._cmake.configure()
         return self._cmake
 
@@ -156,8 +157,9 @@ class IceoryxConan(ConanFile):
         cmake = self._configure_cmake()
         cmake.install()
         self.copy("LICENSE", src=self._source_subfolder, dst="licenses")
-        tools.rmdir(self._pkg_share)
-        tools.rmdir(self._pkg_cmake)
+        self.copy("*.cmake", src=os.path.join(self._source_subfolder, "iceoryx_hoofs", "cmake"), dst="cmake")
+        # tools.rmdir(self._pkg_share)
+        # tools.rmdir(self._pkg_cmake)
         tools.mkdir(self._pkg_res)
         if self.options.toml_config:
             tools.rename(
@@ -180,35 +182,39 @@ class IceoryxConan(ConanFile):
             )
 
     def package_info(self):
+
         self.cpp_info.names["cmake_find_package"] = "iceoryx"
         self.cpp_info.names["cmake_find_multi_package"] = "iceoryx"
         # platform component
+        self.cpp_info.components["platform"].includedirs.append('include/iceoryx/v%s' % self.version)
         self.cpp_info.components["platform"].name = "platform"
         self.cpp_info.components["platform"].libs = ["iceoryx_platform"]
         if self.settings.os in ["Linux","Macos","Neutrino"]:
             self.cpp_info.components["platform"].system_libs.append("pthread")
-        # utils component
-        self.cpp_info.components["utils"].name = "utils"
-        self.cpp_info.components["utils"].libs = ["iceoryx_utils"]
-        self.cpp_info.components["utils"].requires = ["platform"]
+        # hoofs component
+        self.cpp_info.components["hoofs"].includedirs.append('include/iceoryx/v%s' % self.version)
+        self.cpp_info.components["hoofs"].name = "hoofs"
+        self.cpp_info.components["hoofs"].libs = ["iceoryx_hoofs"]
+        self.cpp_info.components["hoofs"].requires = ["platform"]
         if self.settings.os == "Linux":
-            self.cpp_info.components["utils"].requires.append("acl::acl")
-            self.cpp_info.components["utils"].system_libs.append("rt")
+            self.cpp_info.components["hoofs"].requires.append("acl::acl")
+            self.cpp_info.components["hoofs"].system_libs.append("rt")
         if self.settings.os in ["Linux","Macos","Neutrino"]:
-            self.cpp_info.components["utils"].system_libs.append("pthread")
+            self.cpp_info.components["hoofs"].system_libs.append("pthread")
         if self.settings.os == "Linux":
-            self.cpp_info.components["utils"].system_libs.append("atomic")
-        self.cpp_info.components["utils"].builddirs = self._pkg_cmake
-        self.cpp_info.components["utils"].build_modules["cmake_find_package"] = [
-            os.path.join(self._module_subfolder, "conan-official-iceoryx_utils-targets.cmake")
+            self.cpp_info.components["hoofs"].system_libs.append("atomic")
+        self.cpp_info.components["hoofs"].builddirs = self._pkg_cmake
+        self.cpp_info.components["hoofs"].build_modules["cmake_find_package"] = [
+            os.path.join(self._module_subfolder, "conan-official-iceoryx_hoofs-targets.cmake")
         ]
-        self.cpp_info.components["utils"].build_modules["cmake_find_package_multi"] = [
-            os.path.join(self._module_subfolder, "conan-official-iceoryx_utils-targets.cmake")
+        self.cpp_info.components["hoofs"].build_modules["cmake_find_package_multi"] = [
+            os.path.join(self._module_subfolder, "conan-official-iceoryx_hoofs-targets.cmake")
         ]
         # posh component 
+        self.cpp_info.components["posh"].includedirs.append('include/iceoryx/v%s' % self.version)
         self.cpp_info.components["posh"].name = "posh"
         self.cpp_info.components["posh"].libs = ["iceoryx_posh"]
-        self.cpp_info.components["posh"].requires = ["utils"]
+        self.cpp_info.components["posh"].requires = ["hoofs"]
         if self.settings.os in ["Linux","Macos","Neutrino"]:
             self.cpp_info.components["posh"].system_libs.append("pthread")
         self.cpp_info.components["posh"].builddirs = self._pkg_cmake
@@ -219,9 +225,10 @@ class IceoryxConan(ConanFile):
             os.path.join(self._module_subfolder, "conan-official-iceoryx_posh-targets.cmake")
         ]
         # roudi component
+        self.cpp_info.components["posh_roudi"].includedirs.append('include/iceoryx/v%s' % self.version)
         self.cpp_info.components["posh_roudi"].name = "posh_roudi"
         self.cpp_info.components["posh_roudi"].libs = ["iceoryx_posh_roudi"]
-        self.cpp_info.components["posh_roudi"].requires = ["utils", "posh"]
+        self.cpp_info.components["posh_roudi"].requires = ["hoofs", "posh"]
         if self.options.toml_config:
             self.cpp_info.components["post_roudi"].requires.append("cpptoml::cpptoml")
         if self.settings.os in ["Linux","Macos","Neutrino"]:
@@ -234,19 +241,22 @@ class IceoryxConan(ConanFile):
             os.path.join(self._module_subfolder, "conan-official-iceoryx_posh_roudi-targets.cmake")
         ]
         # posh config component 
+        self.cpp_info.components["posh_config"].includedirs.append('include/iceoryx/v%s' % self.version)
         self.cpp_info.components["posh_config"].name = "posh_config"
         self.cpp_info.components["posh_config"].libs = ["iceoryx_posh_config"]
-        self.cpp_info.components["posh_config"].requires = ["posh_roudi", "utils", "posh"]
+        self.cpp_info.components["posh_config"].requires = ["posh_roudi", "hoofs", "posh"]
         if self.settings.os in ["Linux","Macos","Neutrino"]:
             self.cpp_info.components["posh_config"].system_libs.extend(["pthread"])
         # posh gw component
+        self.cpp_info.components["posh_gw"].includedirs.append('include/iceoryx/v%s' % self.version)
         self.cpp_info.components["posh_gw"].name = "posh_gw"
         self.cpp_info.components["posh_gw"].libs = ["iceoryx_posh_gateway"]
-        self.cpp_info.components["posh_gw"].requires = ["utils", "posh"]
+        self.cpp_info.components["posh_gw"].requires = ["hoofs", "posh"]
         # bind_c component
+        self.cpp_info.components["bind_c"].includedirs.append('include/iceoryx/v%s' % self.version)
         self.cpp_info.components["bind_c"].name = "binding_c"
         self.cpp_info.components["bind_c"].libs = ["iceoryx_binding_c"]
-        self.cpp_info.components["bind_c"].requires = ["utils", "posh"]
+        self.cpp_info.components["bind_c"].requires = ["hoofs", "posh"]
         if self.settings.os in ["Linux","Macos","Neutrino"]:        
             self.cpp_info.components["bind_c"].system_libs.extend(["pthread", "stdc++"])
         self.cpp_info.components["bind_c"].builddirs = self._pkg_cmake
@@ -260,4 +270,4 @@ class IceoryxConan(ConanFile):
             # introspection
             self.cpp_info.components["introspection"].name = "introspection"
             self.cpp_info.components["introspection"].libs = ["iceoryx_introspection"]
-            self.cpp_info.components["introspection"].requires = ["utils", "posh", "ncurses::ncurses"]
+            self.cpp_info.components["introspection"].requires = ["hoofs", "posh", "ncurses::ncurses"]

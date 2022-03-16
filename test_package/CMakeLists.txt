@@ -22,9 +22,11 @@ project(examples)
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()
 
+set(CMAKE_MODULE_PATH "${CONAN_ICEORYX_ROOT}/cmake/" ${CMAKE_MODULE_PATH})
+
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_subdirectory(single_process)
-add_subdirectory(icedelivery)
-add_subdirectory(icedelivery_in_c)
+add_subdirectory(singleprocess)
+# add_subdirectory(icedelivery)
+# add_subdirectory(icedelivery_in_c)
