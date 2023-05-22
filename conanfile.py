@@ -1,273 +1,278 @@
-from conans import ConanFile, CMake, tools
+from conan import ConanFile
+from conan.tools.cmake import CMake, CMakeToolchain, cmake_layout, CMakeDeps
+from conan.tools.gnu import PkgConfigDeps
+from conan.tools.scm import Git
+from conan.tools.files import save, patch, rmdir, mkdir, rename, copy, get, replace_in_file, collect_libs
+from conan.tools.build import check_min_cppstd, stdcpp_library
+from conan.tools.system.package_manager import Apt
 from conans.errors import ConanInvalidConfiguration
+
+import semver
 import os
 import textwrap
 
-class IceoryxConan(ConanFile):
+required_conan_version = ">=1.55.0"
 
+
+class IceoryxConan(ConanFile):
     name = "iceoryx"
-    version = "2.0.0"
+    version = "2.0.2"
+
     license = "Apache-2.0"
     homepage = "https://iceoryx.io/"
-    url = "https://github.com/TUM-CONAN/conan-iceoryx"
+    url = "https://github.com/conan-io/conan-center-index"
     description = "Eclipse iceoryx - true zero-copy inter-process-communication"
     topics = ("Shared Memory", "IPC", "ROS", "Middleware")
-    settings = "os", "compiler", "build_type", "arch"
+
+    settings = "os", "arch", "compiler", "build_type"
+
     options = {
-         "shared":          [True, False],
-         "toml_config":     [True, False],
-         "with_introspection":     [True, False]
+        "shared": [True, False],
+        "fPIC": [True, False],
+        "toml_config": [True, False],
     }
     default_options = {
-        "shared":           False,
-        "toml_config":      True,
-        "with_introspection": True,
-        "ncurses:with_tinfo": True
+        "shared": False,
+        "fPIC": True,
+        "toml_config": True,
     }
-    generators = ["cmake", "cmake_find_package"]
-    exports_sources = ["patches/**","CMakeLists.txt"]
-    _cmake = None
 
-    @staticmethod
-    def _create_cmake_module_alias_targets(module_file, alias, aliased):
-        content = ""
-        content += textwrap.dedent("""\
-            if(TARGET {aliased} AND NOT TARGET {alias})
-                add_library({alias} INTERFACE IMPORTED)
-                set_property(TARGET {alias} PROPERTY INTERFACE_LINK_LIBRARIES {aliased})
-            endif()
-        """.format(alias=alias, aliased=aliased))
-        tools.save(module_file, content)
+    exports_sources = ("CMakeLists.txt", "patches/*")
 
-    @property
-    def _module_subfolder(self):
-        return os.path.join(
-            "lib",
-            "cmake"
-        )
+    def system_requirements(self):
+        if self.settings.os == "Linux":
+            pack_names = []
+            pack_names.append("libacl1-dev")
 
-    @property
-    def _source_subfolder(self):
-        return "source_subfolder"
-
-    @property
-    def _build_folder(self):
-        return "build"
-
-    @property
-    def _pkg_share(self):
-        return os.path.join(
-            self.package_folder,
-            "share"
-        )
-
-    @property
-    def _pkg_etc(self):
-        return os.path.join(
-            self.package_folder,
-            "etc"
-        )
-    
-    @property
-    def _pkg_res(self):
-        return os.path.join(
-            self.package_folder,
-            "res"
-        )
-
-    @property
-    def _pkg_cmake(self):
-        return os.path.join(
-            self.package_folder,
-            "lib/cmake"
-        )
-
-    @property
-    def _target_aliases(self):
-        aliases = {
-            "iceoryx_posh::iceoryx_posh": "iceoryx::posh",
-            "iceoryx_posh::iceoryx_posh_roudi": "iceoryx::posh_roudi",
-            "iceoryx_binding_c::iceoryx_binding_c": "iceoryx::binding_c",
-            "iceoryx_hoofs::iceoryx_hoofs": "iceoryx::hoofs",
-        }
-        if self.options.with_introspection and self.settings.os != "Windows":
-            aliases["iceoryx_introspection::iceoryx_introspection"] = "iceoryx::introspection"
-        return aliases
-
-    def _patch_sources(self):
-        for patch in [{"base_path": "source_subfolder","patch_file":"patches/2.0.0-fix-cpptoml-cmake.patch"},]:
-            tools.patch(**patch)
+            Apt(self).install(pack_names)
 
     def config_options(self):
         if self.settings.os == "Windows":
-            self.options.with_introspection=False
-    
+            del self.options.fPIC
+
+    def configure(self):
+        if self.options.shared:
+            del self.options.fPIC
+
     def requirements(self):
         if self.options.toml_config:
             self.requires("cpptoml/0.1.1")
         if self.settings.os == "Linux":
             self.requires("acl/2.3.1")
-        if self.options.with_introspection and self.settings.os != "Windows":
-            self.requires("ncurses/6.2")
-    
-    def validate(self):
-        os = self.settings.os
-        compiler = self.settings.compiler
-        version = tools.Version(self.settings.compiler.version)
-        if compiler.get_safe("cppstd"):
-            tools.check_min_cppstd(self, 14)
-        if os == "Windows" and self.options.shared:
-            raise ConanInvalidConfiguration(
-                'Using Iceoryx on Windows currently just possible with "shared=False"')
-        if (compiler == "gcc" or compiler == "clang") and compiler.libcxx != "libstdc++11":
-            raise ConanInvalidConfiguration(
-                'Using Iceoryx with gcc or clang on Linux requires "compiler.libcxx=libstdc++11"')
-        if os == "Linux" and compiler == "gcc" and version <= "5":
-            raise ConanInvalidConfiguration(
-                "Using Iceoryx with gcc on Linux requires gcc 6 or higher.")
-        if os == "Linux" and compiler == "gcc" and version == "6":
-            self.output.warn(
-                "Iceoryx package is compiled with gcc 6, it is recommended to use 7 or higher")
-            self.output.warn(
-                "GCC 6 will built with warnings.")
-        if compiler == "Visual Studio" and version < "16":
-            raise ConanInvalidConfiguration(
-                "Iceoryx is just supported for Visual Studio compiler 16 and higher.")
 
-    def _configure_cmake(self):
-        if self._cmake:
-            return self._cmake
-        self._cmake = CMake(self)
-        self._cmake.definitions["DOWNLOAD_TOML_LIB"] = "OFF"
-        self._cmake.definitions["TOML_CONFIG"] = "ON" if self.options.toml_config else "OFF"
-        self._cmake.definitions["INTROSPECTION"] = "ON" if (self.options.with_introspection and self.settings.os != "Windows") else "OFF"
-        self._cmake.configure()
-        return self._cmake
+    def build_requirements(self):
+        self.tool_requires("cmake/3.25.3")
+
+    def validate(self):
+        compiler = self.settings.compiler
+        version = str(self.settings.compiler.version)
+
+        if compiler.get_safe("cppstd"):
+            check_min_cppstd(self, 14)
+
+        if compiler == "msvc":
+            if semver.lt(version, "16", True):
+                raise ConanInvalidConfiguration("Iceoryx is just supported for Visual Studio 2019 and higher.")
+            if self.options.shared:
+                raise ConanInvalidConfiguration(
+                    'Using Iceoryx with Visual Studio currently just possible with "shared=False"')
+        elif compiler == "gcc":
+            if semver.lt(version, "6", True):
+                raise ConanInvalidConfiguration("Using Iceoryx with gcc requires gcc 6 or higher.")
+            if semver.lt(version, "9", True) and compiler.get_safe("libcxx") == "libstdc++":
+                raise ConanInvalidConfiguration("gcc < 9 with libstdc++ not supported")
+            if semver.eq(version, "6", True):
+                self.output.warn("Iceoryx package is compiled with gcc 6, it is recommended to use 7 or higher")
+                self.output.warn("GCC 6 will build with warnings.")
+        elif compiler == "clang":
+            if compiler.get_safe("libcxx") == "libstdc++":
+                raise ConanInvalidConfiguration("clang with libstdc++ not supported")
+            if semver.lt(version, "7.0", True) and compiler.get_safe("libcxx") == "libc++" and \
+               self.options.shared and self.settings.build_type == "Debug":
+                raise ConanInvalidConfiguration("shared Debug with clang 7.0 and libc++ not supported")
 
     def source(self):
-        tools.get("https://github.com/eclipse-iceoryx/iceoryx/archive/refs/tags/v%s.tar.gz" % self.version, strip_root=True,
-                  destination=self._source_subfolder)
+        get(self, **self.conan_data["sources"][self.version], strip_root=True, destination=self.source_folder)
+
+    def _patch_sources(self):
+        for p in self.conan_data.get("patches", {}).get(self.version, []):
+            patch(self, **p)
+        # Honor fPIC option
+        iceoryx_utils = "iceoryx_hoofs"
+        for cmake_file in [
+                os.path.join("iceoryx_binding_c", "CMakeLists.txt"),
+                os.path.join("iceoryx_posh", "CMakeLists.txt"),
+                os.path.join(iceoryx_utils, "CMakeLists.txt")
+        ]:
+            replace_in_file(self, os.path.join(self.source_folder, cmake_file), "POSITION_INDEPENDENT_CODE ON", "")
+
+
+
+
+    def generate(self):
+        tc = CMakeToolchain(self)
+
+        def add_cmake_option(option, value):
+            var_name = "{}".format(option).upper()
+            value_str = "{}".format(value)
+            var_value = "ON" if value_str == 'True' else "OFF" if value_str == 'False' else value_str
+            tc.variables[var_name] = var_value
+
+        for option, value in self.options.items():
+            add_cmake_option(option, value)
+
+        tc.cache_variables["TOML_CONFIG"] = self.options.toml_config
+        tc.cache_variables["DOWNLOAD_TOML_LIB"] = False
+
+        tc.generate()
+
+        deps = CMakeDeps(self)
+        deps.generate()
+
+        deps = PkgConfigDeps(self)
+        deps.generate()
+
+    def layout(self):
+        cmake_layout(self)
 
     def build(self):
         self._patch_sources()
-        cmake = self._configure_cmake()
+        cmake = CMake(self)
+        cmake.configure()
         cmake.build()
 
     def package(self):
-        cmake = self._configure_cmake()
+        cmake = CMake(self)
         cmake.install()
-        self.copy("LICENSE", src=self._source_subfolder, dst="licenses")
-        self.copy("*.cmake", src=os.path.join(self._source_subfolder, "iceoryx_hoofs", "cmake"), dst="cmake")
-        # tools.rmdir(self._pkg_share)
-        # tools.rmdir(self._pkg_cmake)
-        tools.mkdir(self._pkg_res)
+        copy(self, "LICENSE", src=self.source_folder, dst=os.path.join(self.package_folder, "licenses"))
+        rmdir(self, os.path.join(self.package_folder, "share"))
+        rmdir(self, os.path.join(self.package_folder, "lib", "cmake"))
         if self.options.toml_config:
-            tools.rename(
-                os.path.join(self._pkg_etc, "roudi_config_example.toml"),
-                os.path.join(self._pkg_res, "roudi_config.toml")
-            )
-        tools.rmdir(self._pkg_etc)
-        for alias, aliased in self._target_aliases.items():
-            cmake_file = "conan-official-{}-targets.cmake".format(
-                aliased.replace("::", "_")
-            )
-            self._create_cmake_module_alias_targets(
-                os.path.join(
-                    self.package_folder,
-                    self._module_subfolder,
-                    cmake_file
-                ),
-                alias,
-                aliased
-            )
+            mkdir(self, os.path.join(self.package_folder, "res"))
+            rename(self, os.path.join(self.package_folder, "etc", "roudi_config_example.toml"),
+                         os.path.join(self.package_folder, "res", "roudi_config.toml"))
+        rmdir(self, os.path.join(self.package_folder, "etc"))
+        # bring to default package structure
+        include_paths = ["iceoryx_binding_c", "iceoryx_hoofs", "iceoryx_posh", "iceoryx_versions.hpp"]
+        for include_path in include_paths:
+            rename(self, 
+                os.path.join(self.package_folder, "include", "iceoryx", "v{}".format(self.version), include_path),
+                os.path.join(self.package_folder, "include", include_path))
+
+        # TODO: to remove in conan v2 once cmake_find_package* generators removed
+        self._create_cmake_module_alias_targets(
+            os.path.join(self.package_folder, self._module_file_rel_path),
+            {v["target"]: "iceoryx::{}".format(k)
+             for k, v in self._iceoryx_components["2.0.0"].items()})
+
+    @property
+    def _iceoryx_components(self):
+
+        def pthread():
+            return ["pthread"] if self.settings.os in ["Linux", "FreeBSD"] else []
+
+        def rt():
+            return ["rt"] if self.settings.os in ["Linux", "FreeBSD"] else []
+
+        def atomic():
+            return ["atomic"] if self.settings.os == "Linux" else []
+
+        def acl():
+            return ["acl::acl"] if self.settings.os == "Linux" else []
+
+        def cpptoml():
+            return ["cpptoml::cpptoml"] if self.options.toml_config else []
+
+        def libcxx():
+            libcxx = stdcpp_library(self)
+            return [libcxx] if libcxx and not self.options.shared else []
+
+        return {
+            "2.0.0": {
+                "iceoryx_platform": {
+                    "target": "iceoryx_hoofs::iceoryx_platform",
+                    "system_libs": pthread() + rt(),
+                    "requires": [],
+                    "includeDir": False
+                },
+                "iceoryx_hoofs": {
+                    "target": "iceoryx_hoofs::iceoryx_hoofs",
+                    "system_libs": pthread() + rt() + atomic(),
+                    "requires": ["iceoryx_platform"] + acl(),
+                    "includeDir": True
+                },
+                "iceoryx_posh": {
+                    "target": "iceoryx_posh::iceoryx_posh",
+                    "system_libs": pthread() + rt(),
+                    "requires": ["iceoryx_hoofs"],
+                    "includeDir": True
+                },
+                "iceoryx_posh_roudi": {
+                    "target": "iceoryx_posh::iceoryx_posh_roudi",
+                    "system_libs": pthread(),
+                    "requires": ["iceoryx_hoofs", "iceoryx_posh"] + cpptoml(),
+                    "includeDir": False
+                },
+                "iceoryx_posh_gateway": {
+                    "target": "iceoryx_posh::iceoryx_posh_gateway",
+                    "system_libs": pthread(),
+                    "requires": ["iceoryx_hoofs", "iceoryx_posh"],
+                    "includeDir": False
+                },
+                "iceoryx_posh_config": {
+                    "target": "iceoryx_posh::iceoryx_posh_config",
+                    "system_libs": pthread(),
+                    "requires": ["iceoryx_posh_roudi", "iceoryx_hoofs", "iceoryx_posh"],
+                    "includeDir": False
+                },
+                "iceoryx_binding_c": {
+                    "target": "iceoryx_binding_c::iceoryx_binding_c",
+                    "system_libs": pthread() + libcxx(),
+                    "requires": ["iceoryx_hoofs", "iceoryx_posh"],
+                    "includeDir": True
+                }
+            }
+        }
+
+    def _create_cmake_module_alias_targets(self, module_file, targets):
+        content = ""
+        for alias, aliased in targets.items():
+            content += textwrap.dedent("""\
+                if(TARGET {aliased} AND NOT TARGET {alias})
+                    add_library({alias} INTERFACE IMPORTED)
+                    set_property(TARGET {alias} PROPERTY INTERFACE_LINK_LIBRARIES {aliased})
+                endif()
+            """.format(alias=alias, aliased=aliased))
+        save(self, module_file, content)
+
+    @property
+    def _module_file_rel_path(self):
+        return os.path.join("lib", "cmake", "conan-official-{}-targets.cmake".format(self.name))
 
     def package_info(self):
+        # FIXME: We should provide 3 CMake config files:
+        #        iceoryx_utilsConfig.cmake, iceoryx_poshConfig.cmake and iceoryx_binding_cConfig.cmake
+        #        It's not possible yet, see https://github.com/conan-io/conan/issues/9000
+        self.cpp_info.set_property("cmake_file_name", "iceoryx")
 
-        self.cpp_info.names["cmake_find_package"] = "iceoryx"
-        self.cpp_info.names["cmake_find_multi_package"] = "iceoryx"
-        # platform component
-        self.cpp_info.components["platform"].includedirs.append('include/iceoryx/v%s' % self.version)
-        self.cpp_info.components["platform"].name = "platform"
-        self.cpp_info.components["platform"].libs = ["iceoryx_platform"]
-        if self.settings.os in ["Linux","Macos","Neutrino"]:
-            self.cpp_info.components["platform"].system_libs.append("pthread")
-        # hoofs component
-        self.cpp_info.components["hoofs"].includedirs.append('include/iceoryx/v%s' % self.version)
-        self.cpp_info.components["hoofs"].name = "hoofs"
-        self.cpp_info.components["hoofs"].libs = ["iceoryx_hoofs"]
-        self.cpp_info.components["hoofs"].requires = ["platform"]
-        if self.settings.os == "Linux":
-            self.cpp_info.components["hoofs"].requires.append("acl::acl")
-            self.cpp_info.components["hoofs"].system_libs.append("rt")
-        if self.settings.os in ["Linux","Macos","Neutrino"]:
-            self.cpp_info.components["hoofs"].system_libs.append("pthread")
-        if self.settings.os == "Linux":
-            self.cpp_info.components["hoofs"].system_libs.append("atomic")
-        self.cpp_info.components["hoofs"].builddirs = self._pkg_cmake
-        self.cpp_info.components["hoofs"].build_modules["cmake_find_package"] = [
-            os.path.join(self._module_subfolder, "conan-official-iceoryx_hoofs-targets.cmake")
-        ]
-        self.cpp_info.components["hoofs"].build_modules["cmake_find_package_multi"] = [
-            os.path.join(self._module_subfolder, "conan-official-iceoryx_hoofs-targets.cmake")
-        ]
-        # posh component 
-        self.cpp_info.components["posh"].includedirs.append('include/iceoryx/v%s' % self.version)
-        self.cpp_info.components["posh"].name = "posh"
-        self.cpp_info.components["posh"].libs = ["iceoryx_posh"]
-        self.cpp_info.components["posh"].requires = ["hoofs"]
-        if self.settings.os in ["Linux","Macos","Neutrino"]:
-            self.cpp_info.components["posh"].system_libs.append("pthread")
-        self.cpp_info.components["posh"].builddirs = self._pkg_cmake
-        self.cpp_info.components["posh"].build_modules["cmake_find_package"] = [
-            os.path.join(self._module_subfolder, "conan-official-iceoryx_posh-targets.cmake")
-        ]
-        self.cpp_info.components["posh"].build_modules["cmake_find_package_multi"] = [
-            os.path.join(self._module_subfolder, "conan-official-iceoryx_posh-targets.cmake")
-        ]
-        # roudi component
-        self.cpp_info.components["posh_roudi"].includedirs.append('include/iceoryx/v%s' % self.version)
-        self.cpp_info.components["posh_roudi"].name = "posh_roudi"
-        self.cpp_info.components["posh_roudi"].libs = ["iceoryx_posh_roudi"]
-        self.cpp_info.components["posh_roudi"].requires = ["hoofs", "posh"]
-        if self.options.toml_config:
-            self.cpp_info.components["post_roudi"].requires.append("cpptoml::cpptoml")
-        if self.settings.os in ["Linux","Macos","Neutrino"]:
-            self.cpp_info.components["posh_roudi"].system_libs.append("pthread")
-        self.cpp_info.components["posh_roudi"].builddirs = self._pkg_cmake
-        self.cpp_info.components["posh_roudi"].build_modules["cmake_find_package"] = [
-            os.path.join(self._module_subfolder, "conan-official-iceoryx_posh_roudi-targets.cmake")
-        ]
-        self.cpp_info.components["posh_roudi"].build_modules["cmake_find_package_multi"] = [
-            os.path.join(self._module_subfolder, "conan-official-iceoryx_posh_roudi-targets.cmake")
-        ]
-        # posh config component 
-        self.cpp_info.components["posh_config"].includedirs.append('include/iceoryx/v%s' % self.version)
-        self.cpp_info.components["posh_config"].name = "posh_config"
-        self.cpp_info.components["posh_config"].libs = ["iceoryx_posh_config"]
-        self.cpp_info.components["posh_config"].requires = ["posh_roudi", "hoofs", "posh"]
-        if self.settings.os in ["Linux","Macos","Neutrino"]:
-            self.cpp_info.components["posh_config"].system_libs.extend(["pthread"])
-        # posh gw component
-        self.cpp_info.components["posh_gw"].includedirs.append('include/iceoryx/v%s' % self.version)
-        self.cpp_info.components["posh_gw"].name = "posh_gw"
-        self.cpp_info.components["posh_gw"].libs = ["iceoryx_posh_gateway"]
-        self.cpp_info.components["posh_gw"].requires = ["hoofs", "posh"]
-        # bind_c component
-        self.cpp_info.components["bind_c"].includedirs.append('include/iceoryx/v%s' % self.version)
-        self.cpp_info.components["bind_c"].name = "binding_c"
-        self.cpp_info.components["bind_c"].libs = ["iceoryx_binding_c"]
-        self.cpp_info.components["bind_c"].requires = ["hoofs", "posh"]
-        if self.settings.os in ["Linux","Macos","Neutrino"]:        
-            self.cpp_info.components["bind_c"].system_libs.extend(["pthread", "stdc++"])
-        self.cpp_info.components["bind_c"].builddirs = self._pkg_cmake
-        self.cpp_info.components["bind_c"].build_modules["cmake_find_package"] = [
-            os.path.join(self._module_subfolder, "conan-official-iceoryx_binding_c-targets.cmake")
-        ]
-        self.cpp_info.components["bind_c"].build_modules["cmake_find_package_multi"] = [
-            os.path.join(self._module_subfolder, "conan-official-iceoryx_binding_c-targets.cmake")
-        ]
-        if self.options.with_introspection and self.settings.os != "Windows":
-            # introspection
-            self.cpp_info.components["introspection"].name = "introspection"
-            self.cpp_info.components["introspection"].libs = ["iceoryx_introspection"]
-            self.cpp_info.components["introspection"].requires = ["hoofs", "posh", "ncurses::ncurses"]
+        def _register_components(components):
+            for lib_name, values in components.items():
+                cmake_target = values.get("target", [])
+                system_libs = values.get("system_libs", [])
+                requires = values.get("requires", [])
+                self.cpp_info.components[lib_name].set_property("cmake_target_name", cmake_target)
+                self.cpp_info.components[lib_name].libs = [lib_name]
+                self.cpp_info.components[lib_name].system_libs = system_libs
+                self.cpp_info.components[lib_name].requires = requires
+                # TODO: to remove in conan v2 once cmake_find_package* generators removed
+                self.cpp_info.components[lib_name].build_modules["cmake_find_package"] = [self._module_file_rel_path]
+                self.cpp_info.components[lib_name].build_modules["cmake_find_package_multi"] = [
+                    self._module_file_rel_path
+                ]
+
+        _register_components(self._iceoryx_components["2.0.0"])
+
+        bin_path = os.path.join(self.package_folder, "bin")
+        self.output.info("Appending PATH environment variable: {}".format(bin_path))
+        self.env_info.PATH.append(bin_path)
+

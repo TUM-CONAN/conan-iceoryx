@@ -1,32 +1,17 @@
-# Copyright (c) 2021 by Apex.AI Inc. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# SPDX-License-Identifier: Apache-2.0
+cmake_minimum_required(VERSION 3.15)
+project(test_package)
 
-# Build icehello example
+if (${MSVC})
+    set(CMAKE_CXX_STANDARD 17)
+else() 
+    set(CMAKE_CXX_STANDARD 14)
+endif()
 
-cmake_minimum_required(VERSION 3.5)
-project(examples)
-
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup()
-
-set(CMAKE_MODULE_PATH "${CONAN_ICEORYX_ROOT}/cmake/" ${CMAKE_MODULE_PATH})
-
-set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_subdirectory(singleprocess)
-# add_subdirectory(icedelivery)
-# add_subdirectory(icedelivery_in_c)
+find_package(iceoryx REQUIRED CONFIG)
+
+add_executable(test_package main.cpp)
+target_link_libraries(test_package  iceoryx_posh::iceoryx_posh
+                            iceoryx_posh::iceoryx_posh_roudi
+)

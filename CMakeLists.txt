@@ -1,7 +1,13 @@
 cmake_minimum_required(VERSION 3.5)
 project(cmake_wrapper)
 
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup()
+# hack ...
+find_package(cpptoml REQUIRED)
+include_directories(${cpptoml_INCLUDE_DIR})
 
-add_subdirectory("source_subfolder/iceoryx_meta")
+if(LINUX)
+  find_package(acl REQUIRED)
+  include_directories(${acl_INCLUDE_DIR})
+endif()
+
+add_subdirectory("iceoryx_meta")
