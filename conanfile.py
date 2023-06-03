@@ -71,15 +71,15 @@ class IceoryxConan(ConanFile):
             check_min_cppstd(self, 14)
 
         if compiler == "msvc":
-            if semver.lt(version, "16", True):
+            if semver.compare(version, "16") == -1:
                 raise ConanInvalidConfiguration("Iceoryx is just supported for Visual Studio 2019 and higher.")
             if self.options.shared:
                 raise ConanInvalidConfiguration(
                     'Using Iceoryx with Visual Studio currently just possible with "shared=False"')
         elif compiler == "gcc":
-            if semver.lt(version, "6", True):
+            if semver.compare(version, "6") == -1:
                 raise ConanInvalidConfiguration("Using Iceoryx with gcc requires gcc 6 or higher.")
-            if semver.lt(version, "9", True) and compiler.get_safe("libcxx") == "libstdc++":
+            if semver.compare(version, "9") == -1 and compiler.get_safe("libcxx") == "libstdc++":
                 raise ConanInvalidConfiguration("gcc < 9 with libstdc++ not supported")
             if semver.eq(version, "6", True):
                 self.output.warn("Iceoryx package is compiled with gcc 6, it is recommended to use 7 or higher")
@@ -87,7 +87,7 @@ class IceoryxConan(ConanFile):
         elif compiler == "clang":
             if compiler.get_safe("libcxx") == "libstdc++":
                 raise ConanInvalidConfiguration("clang with libstdc++ not supported")
-            if semver.lt(version, "7.0", True) and compiler.get_safe("libcxx") == "libc++" and \
+            if semver.compare(version, "7.0") == -1 and compiler.get_safe("libcxx") == "libc++" and \
                self.options.shared and self.settings.build_type == "Debug":
                 raise ConanInvalidConfiguration("shared Debug with clang 7.0 and libc++ not supported")
 
