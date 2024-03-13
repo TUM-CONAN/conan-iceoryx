@@ -1,4 +1,7 @@
 sources:
+  "2.0.5":
+    url: "https://github.com/eclipse-iceoryx/iceoryx/archive/refs/tags/v2.0.5.tar.gz"
+    sha256: "bf6de70e3edee71223f993a29bff5e61af95ce4871104929d8bd1729f544bafb"
   "2.0.2":
     url: "https://github.com/eclipse-iceoryx/iceoryx/archive/v2.0.2.tar.gz"
     sha256: "99871BCAA8DA4361D1BAAE9CF1507683058DE8572AC3080EDC41E590FFBA06C0"

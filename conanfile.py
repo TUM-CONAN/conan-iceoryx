@@ -15,7 +15,7 @@ required_conan_version = ">=1.55.0"
 
 class IceoryxConan(ConanFile):
     name = "iceoryx"
-    version = "2.0.2"
+    version = "2.0.5"
 
     license = "Apache-2.0"
     homepage = "https://iceoryx.io/"
@@ -29,11 +29,14 @@ class IceoryxConan(ConanFile):
         "shared": [True, False],
         "fPIC": [True, False],
         "toml_config": [True, False],
+        "with_introspection": [True, False],
     }
     default_options = {
         "shared": False,
         "fPIC": True,
         "toml_config": True,
+        "with_introspection": True,
+        "ncurses/*:with_tinfo": True,
     }
 
     exports_sources = ("CMakeLists.txt", "patches/*")
@@ -58,6 +61,8 @@ class IceoryxConan(ConanFile):
             self.requires("cpptoml/0.1.1")
         if self.settings.os == "Linux":
             self.requires("acl/2.3.1")
+        if self.options.with_introspection and self.settings.os != "Windows":
+            self.requires("ncurses/6.4", run=True)
 
     def build_requirements(self):
         self.tool_requires("cmake/3.25.3")
@@ -161,6 +166,10 @@ class IceoryxConan(ConanFile):
         def cpptoml():
             return ["cpptoml::cpptoml"] if self.options.toml_config else []
 
+        # this is not quite right but otherwise conan complains ..
+        def ncurses():
+            return ["ncurses::ncurses"] if self.options.with_introspection and self.settings.os != "Windows" else []
+
         def libcxx():
             libcxx = stdcpp_library(self)
             return [libcxx] if libcxx and not self.options.shared else []
@@ -188,7 +197,7 @@ class IceoryxConan(ConanFile):
                 "iceoryx_posh_roudi": {
                     "target": "iceoryx_posh::iceoryx_posh_roudi",
                     "system_libs": pthread(),
-                    "requires": ["iceoryx_hoofs", "iceoryx_posh"] + cpptoml(),
+                    "requires": ["iceoryx_hoofs", "iceoryx_posh"] + cpptoml() + ncurses(),
                     "includeDir": False
                 },
                 "iceoryx_posh_gateway": {
