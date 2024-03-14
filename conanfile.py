@@ -106,6 +106,7 @@ class IceoryxConan(ConanFile):
 
         tc.cache_variables["TOML_CONFIG"] = self.options.toml_config
         tc.cache_variables["DOWNLOAD_TOML_LIB"] = False
+        tc.cache_variables["INTROSPECTION"] = self.options.with_introspection and self.settings.os != "Windows"
 
         tc.generate()
 
