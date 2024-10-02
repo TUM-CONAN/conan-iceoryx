@@ -15,7 +15,7 @@ required_conan_version = ">=1.55.0"
 
 class IceoryxConan(ConanFile):
     name = "iceoryx"
-    version = "2.0.5"
+    version = "2.0.6"
 
     license = "Apache-2.0"
     homepage = "https://iceoryx.io/"
@@ -60,7 +60,7 @@ class IceoryxConan(ConanFile):
         if self.options.toml_config:
             self.requires("cpptoml/0.1.1")
         if self.settings.os == "Linux":
-            self.requires("acl/2.3.1")
+            self.requires("acl/2.3.1@camposs/stable")
         if self.options.with_introspection and self.settings.os != "Windows":
             self.requires("ncurses/6.4", run=True)
 
