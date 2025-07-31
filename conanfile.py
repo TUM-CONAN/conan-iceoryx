@@ -5,6 +5,9 @@ from conan.tools.scm import Git
 from conan.tools.files import save, patch, rmdir, mkdir, rename, copy, get, replace_in_file, collect_libs
 from conan.tools.build import check_min_cppstd, stdcpp_library
 from conan.tools.system.package_manager import Apt
+from conan.tools.scm import Version
+from conan.tools.microsoft import is_msvc, check_min_vs
+
 
 import os
 import textwrap
@@ -51,9 +54,9 @@ class IceoryxConan(ConanFile):
         if self.settings.os == "Windows":
             del self.options.fPIC
 
-    #def configure(self):
-    #    if self.options.shared:
-    #        del self.options.fPIC
+    def configure(self):
+        if self.options.shared:
+            self.options.rm_safe("fPIC")
 
     def requirements(self):
         if self.options.toml_config:
@@ -68,10 +71,37 @@ class IceoryxConan(ConanFile):
 
     def validate(self):
         compiler = self.settings.compiler
-        version = str(self.settings.compiler.version)
+        version = Version(self.settings.compiler.version)
 
         if compiler.get_safe("cppstd"):
             check_min_cppstd(self, 14)
+
+        if is_msvc(self):
+            check_min_vs(self, 192)
+            if self.options.shared:
+                raise ConanInvalidConfiguration(
+                    'Using Iceoryx with Visual Studio currently just possible with "shared=False"'
+                )
+        elif compiler == "gcc":
+            if version < "6":
+                raise ConanInvalidConfiguration("Using Iceoryx with gcc requires gcc 6 or higher.")
+            if version < "9" and compiler.get_safe("libcxx") == "libstdc++":
+                raise ConanInvalidConfiguration("gcc < 9 with libstdc++ not supported")
+            if version == "6":
+                self.output.warning(
+                    "Iceoryx package is compiled with gcc 6, it is recommended to use 7 or higher"
+                )
+                self.output.warning("GCC 6 will build with warnings.")
+        elif compiler == "clang":
+            if compiler.get_safe("libcxx") == "libstdc++":
+                raise ConanInvalidConfiguration("clang with libstdc++ not supported")
+            if (
+                version == "7.0"
+                and compiler.get_safe("libcxx") == "libc++"
+                and self.options.shared
+                and self.settings.build_type == "Debug"
+            ):
+                raise ConanInvalidConfiguration("shared Debug with clang 7.0 and libc++ not supported")
 
     def source(self):
         get(self, **self.conan_data["sources"][self.version], strip_root=True, destination=self.source_folder)
