@@ -7,7 +7,7 @@ from conan.tools.build import check_min_cppstd, stdcpp_library
 from conan.tools.system.package_manager import Apt
 from conan.tools.scm import Version
 from conan.tools.microsoft import is_msvc, check_min_vs
-
+from conan.errors import ConanInvalidConfiguration
 
 import os
 import textwrap
